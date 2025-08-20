@@ -10,13 +10,14 @@ const Sidebar = () => {
         users,
         selectedUser,
         setSelectedUser,
-        unseenMessages, // ✅ Correct
+        unseenMessages,
         setUnseenMessages
     } = useContext(ChatContext);
 
     const { logout, onlineUsers } = useContext(AuthContext);
 
     const [input, setInput] = useState('');
+    const [menuOpen, setMenuOpen] = useState(false); // ✅ new state
     const navigate = useNavigate();
 
     const filteredUsers = input
@@ -35,25 +36,38 @@ const Sidebar = () => {
                 <div className='flex justify-between items-center'>
                     <img src={assets.logo} alt="logo" className='max-w-40' />
 
-                    {/* Hover menu */}
-                    <div className='relative py-2 group'>
-                        <img src={assets.menu_icon} alt="menu" className='max-h-5 cursor-pointer' />
+                    {/* Clickable menu */}
+                    <div className='relative py-2'>
+                        <img
+                            src={assets.menu_icon}
+                            alt="menu"
+                            className='max-h-5 cursor-pointer'
+                            onClick={() => setMenuOpen(!menuOpen)} // ✅ toggle
+                        />
 
-                        <div className='absolute top-full right-0 z-20 w-32 mt-2 rounded-md bg-[#282142] border border-gray-600 text-gray-100 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity duration-200'>
-                            <p
-                                onClick={() => navigate('/profile')}
-                                className='cursor-pointer text-sm hover:bg-gray-700 px-3 py-2 rounded-md'
-                            >
-                                Edit Profile
-                            </p>
-                            <hr className='my-2 border-t border-gray-500' />
-                            <p
-                                onClick={() => logout()}
-                                className='cursor-pointer text-sm hover:bg-gray-700 px-3 py-2 rounded-md'
-                            >
-                                Logout
-                            </p>
-                        </div>
+                        {menuOpen && (
+                            <div className='absolute top-full right-0 z-20 w-32 mt-2 rounded-md bg-[#282142] border border-gray-600 text-gray-100 shadow-lg'>
+                                <p
+                                    onClick={() => {
+                                        setMenuOpen(false);
+                                        navigate('/profile');
+                                    }}
+                                    className='cursor-pointer text-sm hover:bg-gray-700 px-3 py-2 rounded-md'
+                                >
+                                    Edit Profile
+                                </p>
+                                <hr className='my-2 border-t border-gray-500' />
+                                <p
+                                    onClick={() => {
+                                        setMenuOpen(false);
+                                        logout();
+                                    }}
+                                    className='cursor-pointer text-sm hover:bg-gray-700 px-3 py-2 rounded-md'
+                                >
+                                    Logout
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -75,10 +89,8 @@ const Sidebar = () => {
                             setSelectedUser(user);
                             setUnseenMessages(prev => ({ ...prev, [user._id]: 0 }));
                         }}
-
                         key={index}
-                        className={`relative flex items-center gap-2 p-2 pl-4 rounded cursor-pointer max-sm:text-sm ${selectedUser?._id === user._id ? 'bg-[#282142]/50' : ''
-                            }`}
+                        className={`relative flex items-center gap-2 p-2 pl-4 rounded cursor-pointer max-sm:text-sm ${selectedUser?._id === user._id ? 'bg-[#282142]/50' : ''}`}
                     >
                         <img
                             src={user?.profilePic || assets.avatar_icon}
