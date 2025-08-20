@@ -1,35 +1,87 @@
 import { useContext, useEffect, useRef, useState } from "react";
-import assets, { messagesDummyData } from "../assets/assets";
+import assets from "../assets/assets";
 import { formatMessageTime } from "../lib/utils";
 import { ChatContext } from "../../context/Chatcontext";
 import { AuthContext } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 
 const ChatContainer = () => {
-  const { messages, selectedUser, setSelectedUser, sendMessage, getMessages } = useContext(ChatContext);
-  const { authUser, onlineUsers } = useContext(AuthContext);
+  const { messages, selectedUser, setSelectedUser, sendMessage, getMessages, setMessages } = useContext(ChatContext);
+  const { authUser, onlineUsers, socket } = useContext(AuthContext);
 
   const [input, setInput] = useState('');
   const scrollEnd = useRef();
 
-  //handle sending message
+  // Real-time socket listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewMessage = (newMessage) => {
+      // Only add message if it's for the current conversation
+      if (selectedUser && (
+        (newMessage.senderId === selectedUser._id && newMessage.receiverId === authUser._id) ||
+        (newMessage.senderId === authUser._id && newMessage.receiverId === selectedUser._id)
+      )) {
+        setMessages(prev => [...prev, newMessage]);
+      }
+    };
+
+    const handleMessageSent = (sentMessage) => {
+      // Optional: You can update message status here if needed
+    };
+
+    socket.on('newMessage', handleNewMessage);
+    socket.on('messageSent', handleMessageSent);
+
+    return () => {
+      socket.off('newMessage', handleNewMessage);
+      socket.off('messageSent', handleMessageSent);
+    };
+  }, [socket, selectedUser, authUser._id, setMessages]);
+
+  // Handle sending message
   const handlesendMessage = async (e) => {
     e.preventDefault();
     if (input.trim() === "") return null;
-    await sendMessage({ text: input.trim() });
-    setInput("");
+    
+    const tempMessage = {
+      _id: Date.now(),
+      text: input.trim(),
+      senderId: authUser._id,
+      receiverId: selectedUser._id,
+      createdAt: new Date().toISOString(),
+      sending: true
+    };
+    
+    setMessages(prev => [...prev, tempMessage]);
+    const messageText = input.trim();
+    setInput(""); 
+    
+    try {
+      await sendMessage({ text: messageText });
+      setMessages(prev => prev.filter(msg => msg._id !== tempMessage._id));
+    } catch (error) {
+      setMessages(prev => prev.filter(msg => msg._id !== tempMessage._id));
+      toast.error('Failed to send message');
+    }
   };
 
-  //handle sending an image
+  // Handle sending an image
   const handleSendImage = async (e) => {
     const file = e.target.files[0];
     if (!file || !file.type.startsWith("image/")) {
-      toast.error("select an image file");
+      toast.error("Select an image file");
+      return;
     }
+    
     const reader = new FileReader();
     reader.onloadend = async () => {
-      await sendMessage({ image: reader.result });
-      e.target.value = "";
+      try {
+        await sendMessage({ image: reader.result });
+        e.target.value = "";
+      } catch (error) {
+        toast.error('Failed to send image');
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -50,10 +102,16 @@ const ChatContainer = () => {
     <div className="h-full overflow-scroll relative backdrop:blur-lg">
       {/* -----header--------- */}
       <div className="flex items-center gap-3 py-3 mx-4 border-b border-stone-500">
-        <img src={selectedUser.profilePic || assets.avatar_icon} alt="" className="w-8 rounded-full" />
+        <img 
+          src={selectedUser.profilePic || assets.avatar_icon} 
+          alt="" 
+          className="w-8 rounded-full" 
+        />
         <p className="flex-1 text-lg text-white flex items-center gap-2">
           {selectedUser.fullName}
-          {onlineUsers.includes(selectedUser._id) && <span className="w-2 h-2 rounded-full bg-green-500"></span>}
+          {onlineUsers.includes(selectedUser._id) && (
+            <span className="w-2 h-2 rounded-full bg-green-500"></span>
+          )}
         </p>
         <img
           onClick={() => setSelectedUser(null)}
@@ -75,7 +133,7 @@ const ChatContainer = () => {
             className={`flex items-end gap-2 justify-end ${
               msg.senderId !== authUser._id && "flex-row-reverse"
             }`}
-            key={index}
+            key={msg._id || index}
           >
             {msg.image ? (
               <img
@@ -89,9 +147,10 @@ const ChatContainer = () => {
                   msg.senderId === authUser._id
                     ? "rounded-br-none"
                     : "rounded-bl-none"
-                }`}
+                } ${msg.sending ? 'opacity-50' : ''}`}
               >
                 {msg.text}
+                {msg.sending && <span className="ml-1">⏳</span>}
               </p>
             )}
             <div className="text-center text-xs">
